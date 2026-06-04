@@ -376,7 +376,7 @@ export class ZaloClient extends EventEmitter {
       let left = 100; // zca-js expires the QR after 100s
       const tick = () => {
         process.stdout.write(
-          `\r\x1b[2K  ⏳ Tự làm mới sau ${fmt(Math.max(left, 0))} nếu chưa quét  ·  Ctrl-C để huỷ`,
+          `\r\x1b[2K  ⏳ Auto-refreshes in ${fmt(Math.max(left, 0))} if not scanned  ·  Ctrl-C to cancel`,
         );
         left--;
       };
@@ -395,8 +395,8 @@ export class ZaloClient extends EventEmitter {
       const finishWith = (qrText) => {
         console.log("");
         if (qrText) console.log(qrText);
-        console.log("  📱 Mở Zalo → (+) → Quét mã QR, chĩa điện thoại vào màn hình");
-        console.log(`  (fallback) hoặc mở ảnh: ${this.qrPath}`);
+        console.log("  📱 Open Zalo → (+) → Scan QR code, point your phone at the screen");
+        console.log(`  (fallback) or open the image: ${this.qrPath}`);
         startCountdown();
       };
       if (qrterm) qrterm.generate(token, { small: true }, finishWith);
@@ -430,12 +430,12 @@ export class ZaloClient extends EventEmitter {
               image: null,
               displayName: event.data.display_name,
             };
-            stopCountdown(`  ✓ Đã quét bởi ${event.data.display_name} — xác nhận trên điện thoại…`);
+            stopCountdown(`  ✓ Scanned by ${event.data.display_name} — confirm on your phone…`);
             if (!tty) console.log("[zalo] QR scanned by", event.data.display_name, "- confirm on phone.");
             break;
           case LoginQRCallbackEventType.QRCodeExpired:
             this._qrState = { status: "expired", image: null };
-            stopCountdown("  ⏳ QR hết hạn — đang tạo mã mới…");
+            stopCountdown("  ⏳ QR expired — generating a new one…");
             if (!tty) console.log("[zalo] QR expired; regenerating.");
             try { event.actions?.retry?.(); } catch {
               /* ignore */
@@ -443,7 +443,7 @@ export class ZaloClient extends EventEmitter {
             break;
           case LoginQRCallbackEventType.QRCodeDeclined:
             this._qrState = { status: "declined", image: null };
-            stopCountdown("  ✗ Bị từ chối trên điện thoại — đang tạo mã mới…");
+            stopCountdown("  ✗ Declined on your phone — generating a new one…");
             if (!tty) console.log("[zalo] QR login declined; regenerating.");
             try { event.actions?.retry?.(); } catch {
               /* ignore */
