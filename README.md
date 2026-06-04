@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/cuongdev/hermes-zalo-plugin/main/assets/logo.svg" alt="hermes-zalo-plugin" width="660">
+</p>
+
 # hermes-zalo-plugin
 
 📖 **English** · [Tiếng Việt](./README.vi.md)
@@ -116,11 +120,12 @@ You can also fetch the QR while the server runs:
 | `ZALO_PLUGIN_PORT` | `8787` | Listen port |
 | `ZALO_PLUGIN_HOST` | `127.0.0.1` | Bind host (keep loopback unless you add TLS) |
 | `ZALO_PLUGIN_TOKEN` | _(none)_ | Shared secret; if set, required on every route (header `x-bridge-token`, `Authorization: Bearer`, or `?token=`) |
-| `ZALO_CREDENTIALS_PATH` | `./data/credentials.json` | Where credentials persist |
-| `ZALO_QR_PATH` | `./data/qr.png` | Where the QR PNG is written |
+| `ZALO_DATA_DIR` | `~/.hermes-zalo` | Base dir for all runtime data (credentials, QR, undo-cache, logs). Set `./data` for the old in-repo layout. The per-file vars below override individual paths. |
+| `ZALO_CREDENTIALS_PATH` | `~/.hermes-zalo/credentials.json` | Where credentials persist |
+| `ZALO_QR_PATH` | `~/.hermes-zalo/qr.png` | Where the QR PNG is written |
 | `ZALO_SELF_LISTEN` | off | Receive your own outgoing messages too |
 | `ZALO_FORCE_QR` | off | Ignore saved credentials and re-QR |
-| `ZALO_CLIMSG_RETENTION_DAYS` | `30` | Days to keep the undo cache (msgId→cliMsgId) on disk under `data/climsgids/` (daily-rotated JSONL, auto-pruned). Reloaded on startup so message recall (undo) survives restarts. `0` disables persistence (memory-only). |
+| `ZALO_CLIMSG_RETENTION_DAYS` | `30` | Days to keep the undo cache (msgId→cliMsgId) on disk under `~/.hermes-zalo/climsgids/` (daily-rotated JSONL, auto-pruned). Reloaded on startup so message recall (undo) survives restarts. `0` disables persistence (memory-only). |
 | `ZALO_ALLOWED_ACTION_GROUPS` | `read,send,interact` | Comma-separated permission groups, by danger level: `read` < `send` < `interact` < `manage` < `destructive` (or `all`). Gates BOTH `/api/<method>` and the first-class routes. |
 | `ZALO_ALLOW_DESTRUCTIVE` | `false` | Must be `true` to permit the `destructive` group (disperseGroup, deleteMessage, deleteChat, removeFriend, blockUser, leaveGroup, changeGroupOwner, updateProfile/Settings…). OFF even when groups=`all`. |
 | `ZALO_ALLOWED_ACTIONS` | _(none)_ | Custom allowlist — comma-separated zca-js method names always permitted regardless of group. |
@@ -214,7 +219,11 @@ addressed" in groups (real uid match, not text guessing).
 
 ## 5. Wire up the Hermes plugin
 
-The plugin lives at `hermes-agent/plugins/platforms/zalo/`. Two ways to set it up:
+`hermes-zalo-plugin setup` (and the source `install.sh` / `install.ps1`) already
+**bundle and auto-install** the Hermes-side adapter — it copies `hermes-plugin/`
+into `~/.hermes/plugins/zalo/` and enables `zalo-platform` in
+`~/.hermes/config.yaml`, so you normally don't place any files yourself. What's
+left is telling the bot *who and what* it may talk to:
 
 ### Option A — guided wizard (recommended)
 
@@ -272,7 +281,7 @@ Run the bridge first (logged in), then the Hermes gateway.
 | Bot ignores group messages | `ZALO_GROUP_MODE=mention` and you didn't @mention/reply; or the thread isn't in `ZALO_ALLOWED_THREADS`. |
 | "Zalo info calls are backing off" | Rate-limit hit; the bridge is self-throttling. Wait, or raise `ZALO_INFO_CACHE_TTL` to lean on cache. |
 | `getGroupInfo` returns empty | Must be called with an ARRAY of ids; a single string returns nothing. |
-| No realtime logs | Node buffers stdout off-TTY — run with `stdbuf -oL -eL node server.js \| tee data/bridge.log`. |
+| No realtime logs | Node buffers stdout off-TTY — run with `stdbuf -oL -eL node server.js \| tee ~/.hermes-zalo/bridge.log`. |
 
 ## Running as a background service
 

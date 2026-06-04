@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/cuongdev/hermes-zalo-plugin/main/assets/logo.svg" alt="hermes-zalo-plugin" width="660">
+</p>
+
 # hermes-zalo-plugin
 
 [English](./README.md) · 📖 **Tiếng Việt**
@@ -46,6 +50,15 @@ build từ source (zca-js lấy từ npm).
 
 **Điều kiện:** Node.js ≥ 18 ([nodejs.org](https://nodejs.org)).
 
+**Cài từ npm (khuyến nghị):**
+
+```bash
+npm install -g hermes-zalo-plugin
+hermes-zalo-plugin setup      # đăng nhập QR + dịch vụ nền
+```
+
+**Hoặc từ source checkout:**
+
 ```bash
 # macOS / Linux
 ./install.sh
@@ -55,11 +68,14 @@ build từ source (zca-js lấy từ npm).
 ```
 
 Trình cài đặt sẽ:
-1. cài dependencies (`npm install`),
-2. hướng dẫn **đăng nhập QR** (quét một lần; credentials được lưu lại), và
+1. cài dependencies (khi chạy từ source),
+2. hướng dẫn **đăng nhập QR** (quét một lần; credentials được lưu vào
+   `~/.hermes-zalo/`), và
 3. cài **dịch vụ nền** tự khởi động bridge khi đăng nhập/khởi động máy và tự
    chạy lại khi crash — launchd (macOS), systemd user unit (Linux), hoặc
    Scheduled Task (Windows).
+
+Các lệnh CLI: `hermes-zalo-plugin setup | login | start | stop | status | uninstall`.
 
 Sau đó đăng ký vào Hermes:
 
@@ -105,11 +121,12 @@ Bạn cũng có thể lấy QR trong lúc server đang chạy:
 | `ZALO_PLUGIN_PORT` | `8787` | Cổng lắng nghe |
 | `ZALO_PLUGIN_HOST` | `127.0.0.1` | Host bind (giữ loopback trừ khi bạn thêm TLS) |
 | `ZALO_PLUGIN_TOKEN` | _(trống)_ | Khóa bí mật dùng chung; nếu đặt, mọi route đều yêu cầu (header `x-bridge-token`, `Authorization: Bearer`, hoặc `?token=`) |
-| `ZALO_CREDENTIALS_PATH` | `./data/credentials.json` | Nơi lưu credentials |
-| `ZALO_QR_PATH` | `./data/qr.png` | Nơi ghi ảnh QR |
+| `ZALO_DATA_DIR` | `~/.hermes-zalo` | Thư mục gốc cho mọi dữ liệu runtime (credentials, QR, cache thu hồi, log). Đặt `./data` để dùng kiểu cũ trong repo. Các biến từng-file bên dưới override từng đường dẫn. |
+| `ZALO_CREDENTIALS_PATH` | `~/.hermes-zalo/credentials.json` | Nơi lưu credentials |
+| `ZALO_QR_PATH` | `~/.hermes-zalo/qr.png` | Nơi ghi ảnh QR |
 | `ZALO_SELF_LISTEN` | tắt | Nhận cả tin nhắn do chính mình gửi đi |
 | `ZALO_FORCE_QR` | tắt | Bỏ qua credentials đã lưu, đăng nhập lại bằng QR |
-| `ZALO_CLIMSG_RETENTION_DAYS` | `30` | Số ngày giữ cache thu hồi (msgId→cliMsgId) trên đĩa tại `data/climsgids/` (JSONL xoay theo ngày, tự dọn). Nạp lại khi khởi động để chức năng thu hồi (undo) sống sót qua restart. `0` = tắt lưu đĩa (chỉ trong RAM). |
+| `ZALO_CLIMSG_RETENTION_DAYS` | `30` | Số ngày giữ cache thu hồi (msgId→cliMsgId) trên đĩa tại `~/.hermes-zalo/climsgids/` (JSONL xoay theo ngày, tự dọn). Nạp lại khi khởi động để chức năng thu hồi (undo) sống sót qua restart. `0` = tắt lưu đĩa (chỉ trong RAM). |
 | `ZALO_ALLOWED_ACTION_GROUPS` | `read,send,interact` | Danh sách nhóm quyền (phân theo mức độ nguy hiểm): `read` < `send` < `interact` < `manage` < `destructive` (hoặc `all`). Chặn CẢ `/api/<method>` lẫn các route first-class. |
 | `ZALO_ALLOW_DESTRUCTIVE` | `false` | Phải `true` mới cho phép nhóm `destructive` (disperseGroup, deleteMessage, deleteChat, removeFriend, blockUser, leaveGroup, changeGroupOwner, updateProfile/Settings…). TẮT ngay cả khi groups=`all`. |
 | `ZALO_ALLOWED_ACTIONS` | _(trống)_ | Allowlist tùy chỉnh — danh sách tên method zca-js luôn được phép, bất kể nhóm. |
@@ -204,7 +221,11 @@ nhắc đến" trong nhóm (khớp uid thật, không đoán theo chữ).
 
 ## 5. Kết nối plugin Hermes
 
-Plugin nằm ở `hermes-agent/plugins/platforms/zalo/`. Hai cách thiết lập:
+`hermes-zalo-plugin setup` (và `install.sh` / `install.ps1` từ source) đã **đóng
+gói sẵn và tự cài** adapter phía Hermes — copy `hermes-plugin/` vào
+`~/.hermes/plugins/zalo/` và bật `zalo-platform` trong `~/.hermes/config.yaml`,
+nên bình thường bạn không cần tự đặt file nào. Việc còn lại là khai báo *ai và
+việc gì* bot được phép làm:
 
 ### Cách A — wizard hướng dẫn (khuyến nghị)
 
@@ -261,7 +282,7 @@ Chạy bridge trước (đã đăng nhập), rồi mới chạy Hermes gateway.
 | Bot bỏ qua tin trong nhóm | `ZALO_GROUP_MODE=mention` mà bạn không @nhắc/trả lời; hoặc thread không nằm trong `ZALO_ALLOWED_THREADS`. |
 | "Zalo info calls are backing off" | Đã chạm rate-limit; bridge đang tự giảm tốc. Chờ, hoặc tăng `ZALO_INFO_CACHE_TTL` để dựa vào cache. |
 | `getGroupInfo` trả về rỗng | Phải gọi với MỘT MẢNG id; truyền 1 string đơn sẽ không trả gì. |
-| Không thấy log realtime | Node buffer stdout khi không phải TTY — chạy với `stdbuf -oL -eL node server.js \| tee data/bridge.log`. |
+| Không thấy log realtime | Node buffer stdout khi không phải TTY — chạy với `stdbuf -oL -eL node server.js \| tee ~/.hermes-zalo/bridge.log`. |
 
 ## Chạy như dịch vụ nền
 
