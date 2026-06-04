@@ -16,13 +16,24 @@ Node.js bridge connecting **zca-js** (unofficial personal Zalo API) to the
 personal Zalo account.
 
 ```
-Zalo servers ──ws──> [ this bridge (Node + zca-js) ] <──HTTP/SSE──> [ Hermes plugin: platforms/zalo ]
+Zalo servers  <──>  [ this bridge: Node + zca-js ]  <──>  [ Hermes adapter: platform "zalo" ]
 ```
 
-- **Inbound** (Zalo → Hermes): Server-Sent Events at `GET /events`
-  (heartbeat every 15s + `Last-Event-ID` replay from a ring buffer).
-- **Outbound** (Hermes → Zalo): REST `POST /send`, `/send-attachment`,
-  `/send-sticker`, `/send-voice`, `/typing`.
+- **Zalo ↔ bridge:** inbound events arrive over a **ws** listener; outbound
+  actions (send / upload / react…) go out over **HTTPS** to Zalo's API.
+- **bridge ↔ Hermes — inbound** (Zalo → Hermes): Server-Sent Events at
+  `GET /events` (heartbeat every 15s + `Last-Event-ID` replay from a ring buffer).
+- **bridge ↔ Hermes — outbound** (Hermes → Zalo): REST `POST /send`,
+  `/send-attachment`, `/send-sticker`, `/send-voice`, `/typing`.
+
+**Why zca-js (over an unofficial Python Zalo client)?** Both are **unofficial**,
+reverse-engineered clients for the *personal* Zalo account API — neither is
+blessed by Zalo. We picked [zca-js](https://www.npmjs.com/package/zca-js) because
+it's **more actively maintained** and has a **richer feature surface** than the
+Python equivalents: it keeps up with Zalo's protocol changes and covers messages,
+media, stickers, reactions, groups, polls, friends… the full 145-method API this
+bridge exposes. The trade-off of that choice — zca-js is TypeScript while Hermes
+is Python — is exactly what the thin Node bridge pays for.
 
 > ⚠️ **zca-js is UNOFFICIAL.** Use a secondary Zalo account. Zalo may
 > rate-limit or lock accounts that automate. You accept that risk.
@@ -282,6 +293,7 @@ Run the bridge first (logged in), then the Hermes gateway.
 | "Zalo info calls are backing off" | Rate-limit hit; the bridge is self-throttling. Wait, or raise `ZALO_INFO_CACHE_TTL` to lean on cache. |
 | `getGroupInfo` returns empty | Must be called with an ARRAY of ids; a single string returns nothing. |
 | No realtime logs | Node buffers stdout off-TTY — run with `stdbuf -oL -eL node server.js \| tee ~/.hermes-zalo/bridge.log`. |
+| `hermes-zalo-plugin: command not found` after `npm i -g` | npm's global bin dir isn't on your PATH (common when installing with the Node Hermes bundles at `~/.hermes/node`). v1.0.1+ auto-links the command next to your `node` on install; if it's still not found, run `rehash` (zsh) / `hash -r` (bash) or open a new shell — or just use `npx hermes-zalo-plugin <cmd>`. |
 
 ## Running as a background service
 

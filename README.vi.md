@@ -16,13 +16,24 @@ với gateway của **Hermes Agent**. Nhờ nó, bạn có thể chat với Herm
 một tài khoản Zalo cá nhân.
 
 ```
-Máy chủ Zalo ──ws──> [ bridge này (Node + zca-js) ] <──HTTP/SSE──> [ plugin Hermes: platforms/zalo ]
+Máy chủ Zalo  <──>  [ bridge này: Node + zca-js ]  <──>  [ adapter Hermes: platform "zalo" ]
 ```
 
-- **Chiều vào** (Zalo → Hermes): Server-Sent Events tại `GET /events`
-  (heartbeat mỗi 15s + replay `Last-Event-ID` từ ring buffer).
-- **Chiều ra** (Hermes → Zalo): REST `POST /send`, `/send-attachment`,
-  `/send-sticker`, `/send-voice`, `/typing`.
+- **Zalo ↔ bridge:** sự kiện chiều vào đến qua **ws** (listener); hành động chiều
+  ra (gửi / upload / react…) đi qua **HTTPS** tới API của Zalo.
+- **bridge ↔ Hermes — chiều vào** (Zalo → Hermes): Server-Sent Events tại
+  `GET /events` (heartbeat mỗi 15s + replay `Last-Event-ID` từ ring buffer).
+- **bridge ↔ Hermes — chiều ra** (Hermes → Zalo): REST `POST /send`,
+  `/send-attachment`, `/send-sticker`, `/send-voice`, `/typing`.
+
+**Vì sao chọn zca-js (thay vì thư viện Zalo không chính thức bằng Python)?** Cả
+hai đều **KHÔNG chính thức**, dựng bằng reverse-engineer cho API tài khoản Zalo
+**cá nhân** — không cái nào được Zalo bảo trợ. Mình chọn
+[zca-js](https://www.npmjs.com/package/zca-js) vì nó **còn được bảo trì tích cực
+hơn** và **hỗ trợ nhiều chức năng hơn** so với bản Python: bám theo thay đổi
+protocol của Zalo, bao phủ nhắn tin, media, sticker, reaction, nhóm, poll, kết
+bạn… đủ 145 method mà bridge này phơi ra. Cái giá của lựa chọn đó — zca-js là
+TypeScript còn Hermes là Python — chính là thứ mà bridge Node mỏng này gánh.
 
 > ⚠️ **zca-js là API KHÔNG CHÍNH THỨC.** Nên dùng tài khoản Zalo phụ. Zalo có
 > thể giới hạn tốc độ (rate-limit) hoặc khóa tài khoản tự động hóa. Bạn tự chịu
@@ -283,6 +294,7 @@ Chạy bridge trước (đã đăng nhập), rồi mới chạy Hermes gateway.
 | "Zalo info calls are backing off" | Đã chạm rate-limit; bridge đang tự giảm tốc. Chờ, hoặc tăng `ZALO_INFO_CACHE_TTL` để dựa vào cache. |
 | `getGroupInfo` trả về rỗng | Phải gọi với MỘT MẢNG id; truyền 1 string đơn sẽ không trả gì. |
 | Không thấy log realtime | Node buffer stdout khi không phải TTY — chạy với `stdbuf -oL -eL node server.js \| tee ~/.hermes-zalo/bridge.log`. |
+| `hermes-zalo-plugin: command not found` sau khi `npm i -g` | Thư mục bin global của npm không nằm trên PATH (hay gặp khi cài bằng Node mà Hermes bundle ở `~/.hermes/node`). Từ v1.0.1, lệnh được tự symlink cạnh `node` của bạn khi cài; nếu vẫn không thấy, chạy `rehash` (zsh) / `hash -r` (bash) hoặc mở terminal mới — hoặc dùng `npx hermes-zalo-plugin <cmd>`. |
 
 ## Chạy như dịch vụ nền
 
