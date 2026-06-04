@@ -15,6 +15,7 @@
   },
   "files": [
     "bin/",
+    "hermes-plugin/",
     "server.js",
     "zaloClient.js",
     "permissions.js",

@@ -186,6 +186,102 @@ function installService() {
   log(`⚠ Unsupported platform '${PLATFORM}' for auto-service. Run the bridge manually: npm start`);
 }
 
+// ── 4. Install the Hermes-side plugin so `hermes gateway` sees Zalo ──────────
+// The bridge (Node) and the Hermes adapter (Python) are separate halves. The
+// adapter lives under hermes-plugin/ in this package; copy it into the user's
+// Hermes plugin dir (~/.hermes/plugins/zalo) and add "zalo" to plugins.enabled
+// so the (untrusted) user plugin is allowed to load.
+function installHermesPlugin() {
+  step(4, "Installing the Hermes plugin (so `hermes gateway` sees Zalo)…");
+  const src = path.join(__dirname, "hermes-plugin");
+  if (!fs.existsSync(src)) {
+    log("⚠ hermes-plugin/ not found in package — skipping (bridge still works standalone).");
+    return;
+  }
+  const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), ".hermes");
+  if (!fs.existsSync(hermesHome)) {
+    log(`⚠ Hermes home not found at ${hermesHome}. Is Hermes installed?`);
+    log("  Skipping plugin install. After installing Hermes, re-run: npx hermes-zalo-bridge setup --service-only");
+    return;
+  }
+  const dest = path.join(hermesHome, "plugins", "zalo");
+  fs.mkdirSync(dest, { recursive: true });
+  for (const f of fs.readdirSync(src)) {
+    fs.copyFileSync(path.join(src, f), path.join(dest, f));
+  }
+  log(`✓ Plugin copied to ${dest}`);
+
+  // Enable the plugin in config.yaml (plugins.enabled must contain "zalo").
+  const cfgPath = path.join(hermesHome, "config.yaml");
+  try {
+    const enabled = enableZaloInConfig(cfgPath);
+    log(enabled === "already" ? "✓ Plugin already enabled in config.yaml"
+        : enabled === "added" ? '✓ Added "zalo-platform" to plugins.enabled in config.yaml'
+        : '✓ Created plugins.enabled with "zalo-platform" in config.yaml');
+  } catch (e) {
+    log(`⚠ Could not auto-enable the plugin: ${e.message}`);
+    log('  Manually add "zalo-platform" under plugins.enabled in ~/.hermes/config.yaml');
+  }
+}
+
+// Minimal, robust YAML editor for the one thing we need: ensure
+// plugins.enabled contains "zalo". Operates line-by-line to avoid a YAML dep.
+// Returns "already" | "added" | "created".
+function enableZaloInConfig(cfgPath) {
+  const text = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, "utf-8") : "";
+  const lines = text.split("\n");
+
+  // Find a top-level "plugins:" line (no leading whitespace).
+  let pluginsIdx = lines.findIndex((l) => /^plugins:\s*$/.test(l));
+  if (pluginsIdx === -1) {
+    // No plugins block — append a fresh one.
+    const sep = text.length && !text.endsWith("\n") ? "\n" : "";
+    fs.writeFileSync(cfgPath, text + sep + "\nplugins:\n  enabled:\n    - zalo-platform\n");
+    return "created";
+  }
+
+  // Within the plugins block, find "enabled:" (2-space indent).
+  let i = pluginsIdx + 1;
+  let enabledIdx = -1;
+  for (; i < lines.length; i++) {
+    if (/^\S/.test(lines[i]) && lines[i].trim() !== "") break; // left the block
+    if (/^\s+enabled:/.test(lines[i])) { enabledIdx = i; break; }
+  }
+
+  if (enabledIdx === -1) {
+    // plugins: exists but no enabled: — insert one right after plugins:.
+    lines.splice(pluginsIdx + 1, 0, "  enabled:", "    - zalo-platform");
+    fs.writeFileSync(cfgPath, lines.join("\n"));
+    return "added";
+  }
+
+  // enabled: may be inline ([a, b]) or a block list. Scan following list items.
+  const inline = lines[enabledIdx].match(/enabled:\s*\[(.*)\]/);
+  if (inline) {
+    if (/(^|[,\s])zalo-platform([,\s]|$)/.test(inline[1])) return "already";
+    const items = inline[1].trim();
+    lines[enabledIdx] = lines[enabledIdx].replace(
+      /enabled:\s*\[.*\]/,
+      `enabled: [${items ? items + ", " : ""}zalo-platform]`,
+    );
+    fs.writeFileSync(cfgPath, lines.join("\n"));
+    return "added";
+  }
+
+  // Block list: check the indented "- " items below enabled:. Track the last
+  // real list item so we insert right after it (not after trailing blanks).
+  let lastItem = enabledIdx;
+  for (let j = enabledIdx + 1; j < lines.length; j++) {
+    if (/^\s*-\s*zalo-platform\s*$/.test(lines[j])) return "already";
+    if (/^\s*-\s/.test(lines[j])) { lastItem = j; continue; }
+    if (lines[j].trim() === "") continue; // skip blank lines within/after the list
+    break; // a non-list, non-blank line ends the list
+  }
+  lines.splice(lastItem + 1, 0, "    - zalo-platform");
+  fs.writeFileSync(cfgPath, lines.join("\n"));
+  return "added";
+}
+
 function nextSteps() {
   const port = process.env.ZALO_BRIDGE_PORT || "8787";
   console.log(`
@@ -231,6 +327,7 @@ async function main() {
 
   if (SERVICE_ONLY) {
     installService();
+    installHermesPlugin();
     nextSteps();
     return;
   }
@@ -239,6 +336,7 @@ async function main() {
   login();
   if (!NO_SERVICE) installService();
   else log("\n(Skipping background service — run `npm start` to launch the bridge.)");
+  installHermesPlugin();
   nextSteps();
 }
 
