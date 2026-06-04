@@ -286,40 +286,37 @@ in the foreground. The bridge auto-reconnects the Zalo websocket (zca-js
 ## Publishing (maintainers)
 
 CI runs on every push/PR (syntax + CLI smoke + pack-safety on Node 18/20/22
-across macOS/Linux/Windows). Publishing uses **npm Trusted Publishing (OIDC)** —
-no long-lived `NPM_TOKEN` to store or leak.
+across macOS/Linux/Windows). Publishing is automated by `publish.yml` on `v*`
+tags, authenticated with an npm access token and attested with `--provenance`
+(supply-chain proof tied to this repo + workflow).
 
-**One-time bootstrap** (npm requires the package to exist before you can enable
-trusted publishing for it):
+**One-time setup:**
 
-1. Publish the first version manually:
-   ```bash
-   npm login
-   npm publish --access public
-   ```
-2. On npmjs.com → your package → **Settings → Trusted Publisher → GitHub
-   Actions**, set:
-   - Organization/user: `cuongdev`
-   - Repository: `hermes-zalo-plugin`
-   - Workflow filename: `publish.yml`
+1. npmjs.com → **Account → Access Tokens → Generate New Token → Granular Access
+   Token**. Scope **Packages = Read and write** (you can limit it to
+   `hermes-zalo-plugin` after the first publish). Copy the `npm_…` value.
+2. GitHub → this repo → **Settings → Secrets and variables → Actions → New
+   repository secret**: name `NPM_TOKEN`, value = the token.
 
-**After that**, releases are automatic and tokenless:
+**Every release after that:**
 
 ```bash
-npm version patch        # bug fixes        → 1.0.0 → 1.0.1
-npm version minor        # new features      → 1.0.0 → 1.1.0
-npm version major        # breaking changes  → 1.0.0 → 2.0.0
-git push --follow-tags   # the v* tag triggers publish.yml (OIDC publish)
+npm version patch        # bug fixes         → 1.0.0 → 1.0.1
+npm version minor        # new features       → 1.0.0 → 1.1.0
+npm version major        # breaking changes   → 1.0.0 → 2.0.0
+git push --follow-tags   # the v* tag triggers publish.yml
 ```
 
+`npm version` bumps `package.json` and creates the matching `vX.Y.Z` git tag in
+one step; the workflow fails fast if the tag and `package.json` version disagree.
 Versioning follows [semver](https://semver.org/): **patch** = backward-compatible
 fixes, **minor** = backward-compatible features, **major** = breaking changes.
-`npm version` bumps `package.json` and creates the matching `vX.Y.Z` git tag in
-one step.
 
-The workflow runs on Node 24 / npm latest (Trusted Publishing needs npm ≥ 11.5.1)
-and publishes with `--provenance`, so each release is cryptographically attested
-to this repo and workflow.
+> **Going tokenless later (optional):** once the package exists on npm you can
+> switch to [npm Trusted Publishing (OIDC)](https://docs.npmjs.com/trusted-publishers) —
+> configure a Trusted Publisher (repo + `publish.yml`) on the package settings,
+> bump the workflow runner to Node 24 (Trusted Publishing needs npm ≥ 11.5.1),
+> drop the `NODE_AUTH_TOKEN` line, and delete the `NPM_TOKEN` secret.
 
 ## License
 
