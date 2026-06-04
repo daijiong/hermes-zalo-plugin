@@ -306,9 +306,16 @@ trusted publishing for it):
 **After that**, releases are automatic and tokenless:
 
 ```bash
-npm version patch        # bumps package.json + creates a git tag
+npm version patch        # bug fixes        → 1.0.0 → 1.0.1
+npm version minor        # new features      → 1.0.0 → 1.1.0
+npm version major        # breaking changes  → 1.0.0 → 2.0.0
 git push --follow-tags   # the v* tag triggers publish.yml (OIDC publish)
 ```
+
+Versioning follows [semver](https://semver.org/): **patch** = backward-compatible
+fixes, **minor** = backward-compatible features, **major** = breaking changes.
+`npm version` bumps `package.json` and creates the matching `vX.Y.Z` git tag in
+one step.
 
 The workflow runs on Node 24 / npm latest (Trusted Publishing needs npm ≥ 11.5.1)
 and publishes with `--provenance`, so each release is cryptographically attested
