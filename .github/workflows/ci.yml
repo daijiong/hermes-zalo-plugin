@@ -36,6 +36,7 @@ jobs:
           node --check install.mjs
           node --check uninstall.mjs
           node --check bin/cli.mjs
+          node --check scripts/postinstall.mjs
 
       - name: CLI smoke test (help + status, no login)
         run: |

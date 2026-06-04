@@ -134,8 +134,30 @@ function purgeCredentials() {
   }
 }
 
+// Remove the convenience symlink the postinstall dropped into a PATH dir.
+// npm no longer runs uninstall lifecycle scripts, so we clean it up here.
+// Only removes it if it's a symlink (never a real file someone else placed).
+function removeBinLink() {
+  try {
+    const base = process.env.ZALO_DATA_DIR
+      ? path.resolve(process.env.ZALO_DATA_DIR)
+      : path.join(os.homedir(), ".hermes-zalo");
+    const record = path.join(base, ".binlink");
+    if (!fs.existsSync(record)) return;
+    const link = fs.readFileSync(record, "utf-8").trim();
+    if (link && fs.existsSync(link) && fs.lstatSync(link).isSymbolicLink()) {
+      fs.rmSync(link, { force: true });
+      log(`✓ Removed CLI symlink: ${link}`);
+    }
+    fs.rmSync(record, { force: true });
+  } catch (e) {
+    log(`• Could not remove CLI symlink: ${e.message}`);
+  }
+}
+
 console.log("Hermes Zalo Plugin — uninstaller\n================================");
 removeService();
 removeHermesPlugin();
+removeBinLink();
 if (PURGE) purgeCredentials();
 console.log("\nDone. (The bridge files themselves were left in place.)");

@@ -11,10 +11,12 @@
     "start": "node server.js",
     "login": "node login.mjs",
     "setup": "node install.mjs",
-    "uninstall": "node uninstall.mjs"
+    "uninstall": "node uninstall.mjs",
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "files": [
     "bin/",
+    "scripts/",
     "hermes-plugin/",
     "server.js",
     "zaloClient.js",

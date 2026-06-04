@@ -49,7 +49,7 @@ jobs:
 
       - name: Syntax check
         run: |
-          for f in server.js zaloClient.js permissions.js paths.js login.mjs install.mjs uninstall.mjs bin/cli.mjs; do
+          for f in server.js zaloClient.js permissions.js paths.js login.mjs install.mjs uninstall.mjs bin/cli.mjs scripts/postinstall.mjs; do
             node --check "$f"
           done
 
