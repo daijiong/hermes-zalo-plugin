@@ -173,6 +173,14 @@ Telegram — để TRỐNG = cho phép tất cả / mọi nơi:
 Trình wizard (`hermes gateway setup` → Zalo) gọi `/contacts` và cho bạn **tìm
 theo tên rồi chọn** thay vì phải gõ id thô.
 
+> **Lưu ý mặc định** (chú ý sự bất đối xứng):
+> - **Người dùng** — để trống `ZALO_ALLOWED_USERS` thì **bất kỳ ai** cũng nhắn
+>   được với bot (cho phép tất cả, kiểu Telegram).
+> - **Nhóm** — trong `hermes gateway setup`, nếu **không chọn nhóm nào**, wizard
+>   set `ZALO_GROUP_MODE=off`: bot **không** trả lời trong **bất kỳ nhóm nào**
+>   (kể cả khi được @nhắc). Chat 1-1 (DM) vẫn hoạt động. Chọn nhóm cụ thể để rồi
+>   chọn cách bot xử trong nhóm (`mention` / `all` / `off`).
+
 ### Giới hạn tốc độ gọi info (chống khóa tài khoản)
 
 zca-js không chính thức; gọi dồn dập `getUserInfo`/`getGroupInfo`/`getAllGroups`/`getAllFriends`

@@ -171,6 +171,14 @@ These are **adapter-side** env vars (set where `hermes gateway` runs), Telegram-
 The setup wizard (`hermes gateway setup` → Zalo) fetches `/contacts` and lets you
 **search by name and pick** instead of typing raw ids.
 
+> **Defaults to be aware of** (note the asymmetry):
+> - **Users** — leave `ZALO_ALLOWED_USERS` empty and **anyone** may talk to the
+>   bot (allow-all, Telegram-style).
+> - **Groups** — in `hermes gateway setup`, if you pick **no group**, the wizard
+>   sets `ZALO_GROUP_MODE=off`: the bot stays out of **every** group and won't
+>   reply even when @mentioned. DMs / 1-1 chats still work. Pick specific groups
+>   to then choose how it behaves there (`mention` / `all` / `off`).
+
 ### Info-call rate limiting (anti account-lock)
 
 zca-js is unofficial; hammering `getUserInfo`/`getGroupInfo`/`getAllGroups`/`getAllFriends`
