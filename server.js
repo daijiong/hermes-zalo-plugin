@@ -2,9 +2,9 @@
 // HTTP bridge: SSE inbound (Zalo -> Hermes) + REST outbound (Hermes -> Zalo).
 //
 // Env vars:
-//   ZALO_BRIDGE_PORT      (default 8787)
-//   ZALO_BRIDGE_TOKEN     (optional shared secret; required on all routes if set)
-//   ZALO_BRIDGE_HOST      (default 127.0.0.1 — keep loopback unless you add TLS)
+//   ZALO_PLUGIN_PORT      (default 8787)
+//   ZALO_PLUGIN_TOKEN     (optional shared secret; required on all routes if set)
+//   ZALO_PLUGIN_HOST      (default 127.0.0.1 — keep loopback unless you add TLS)
 //   ZALO_CREDENTIALS_PATH (default ./data/credentials.json)
 //   ZALO_QR_PATH          (default ./data/qr.png)
 //   ZALO_SELF_LISTEN      (1/true to receive own messages; default off)
@@ -20,9 +20,9 @@ import { credentialsPath, qrPath, cliMsgDir } from "./paths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const PORT = parseInt(process.env.ZALO_BRIDGE_PORT || "8787", 10);
-const HOST = process.env.ZALO_BRIDGE_HOST || "127.0.0.1";
-const TOKEN = process.env.ZALO_BRIDGE_TOKEN || "";
+const PORT = parseInt(process.env.ZALO_PLUGIN_PORT || "8787", 10);
+const HOST = process.env.ZALO_PLUGIN_HOST || "127.0.0.1";
+const TOKEN = process.env.ZALO_PLUGIN_TOKEN || "";
 const CREDENTIALS_PATH = credentialsPath();
 const QR_PATH = qrPath();
 const SELF_LISTEN = /^(1|true|yes)$/i.test(process.env.ZALO_SELF_LISTEN || "");
@@ -652,7 +652,7 @@ app.post("/poll/create", async (req, res) => {
 async function main() {
   _httpServer = app.listen(PORT, HOST, () => {
     console.log(`[bridge] listening on http://${HOST}:${PORT}`);
-    if (!TOKEN) console.log("[bridge] WARNING: no ZALO_BRIDGE_TOKEN set (loopback only recommended)");
+    if (!TOKEN) console.log("[bridge] WARNING: no ZALO_PLUGIN_TOKEN set (loopback only recommended)");
   });
 
   try {

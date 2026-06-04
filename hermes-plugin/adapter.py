@@ -1,7 +1,7 @@
 """
 Zalo Platform Adapter for Hermes Agent.
 
-Bridges to a companion Node.js process (hermes-zalo-bridge) that runs
+Bridges to a companion Node.js process (hermes-zalo-plugin) that runs
 zca-js (the unofficial Zalo personal API). Communication:
 
     inbound  : SSE stream  GET  {bridge}/events   (Zalo -> Hermes)
@@ -22,7 +22,7 @@ Configuration in config.yaml::
             max_message_length: 4000
 
 Or via environment variables (override config.yaml):
-    ZALO_BRIDGE_URL, ZALO_BRIDGE_TOKEN, ZALO_ALLOWED_USERS,
+    ZALO_PLUGIN_URL, ZALO_PLUGIN_TOKEN, ZALO_ALLOWED_USERS,
     ZALO_ALLOW_ALL_USERS, ZALO_HOME_CHANNEL, ZALO_GROUP_REQUIRE_MENTION
 """
 
@@ -34,6 +34,158 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# ── zca-js action → permission-group map (KEEP IN SYNC WITH permissions.js) ──
+# Mirrors ACTION_GROUP in the bridge's permissions.js (145 APIs). Bundled
+# statically so `hermes gateway setup` can offer a custom action picker even
+# when the bridge is offline. If permissions.js changes, regenerate this.
+_ACTION_GROUP = {
+    "acceptFriendRequest": "manage",
+    "addGroupBlockedMember": "destructive",
+    "addGroupDeputy": "manage",
+    "addPollOptions": "interact",
+    "addQuickMessage": "manage",
+    "addReaction": "interact",
+    "addUnreadMark": "manage",
+    "addUserToGroup": "manage",
+    "blockUser": "destructive",
+    "blockViewFeed": "destructive",
+    "changeAccountAvatar": "destructive",
+    "changeFriendAlias": "manage",
+    "changeGroupAvatar": "manage",
+    "changeGroupName": "manage",
+    "changeGroupOwner": "destructive",
+    "createAutoReply": "manage",
+    "createCatalog": "manage",
+    "createGroup": "manage",
+    "createNote": "interact",
+    "createPoll": "interact",
+    "createProductCatalog": "manage",
+    "createReminder": "interact",
+    "deleteAutoReply": "destructive",
+    "deleteAvatar": "destructive",
+    "deleteCatalog": "destructive",
+    "deleteChat": "destructive",
+    "deleteGroupInviteBox": "destructive",
+    "deleteMessage": "destructive",
+    "deleteProductCatalog": "destructive",
+    "disableGroupLink": "destructive",
+    "disperseGroup": "destructive",
+    "editNote": "interact",
+    "editReminder": "interact",
+    "enableGroupLink": "manage",
+    "fetchAccountInfo": "read",
+    "findUser": "read",
+    "findUserByUsername": "read",
+    "forwardMessage": "send",
+    "getAliasList": "read",
+    "getAllFriends": "read",
+    "getAllGroups": "read",
+    "getArchivedChatList": "read",
+    "getAutoDeleteChat": "read",
+    "getAutoReplyList": "read",
+    "getAvatarList": "read",
+    "getAvatarUrlProfile": "read",
+    "getBizAccount": "read",
+    "getCatalogList": "read",
+    "getCloseFriends": "read",
+    "getContext": "read",
+    "getCookie": "read",
+    "getFriendBoardList": "read",
+    "getFriendOnlines": "read",
+    "getFriendRecommendations": "read",
+    "getFriendRequestStatus": "read",
+    "getFullAvatar": "read",
+    "getGroupBlockedMember": "read",
+    "getGroupChatHistory": "read",
+    "getGroupInfo": "read",
+    "getGroupInviteBoxInfo": "read",
+    "getGroupInviteBoxList": "read",
+    "getGroupLinkDetail": "read",
+    "getGroupLinkInfo": "read",
+    "getGroupMembersInfo": "read",
+    "getHiddenConversations": "read",
+    "getLabels": "read",
+    "getListBoard": "read",
+    "getListReminder": "read",
+    "getMultiUsersByPhones": "read",
+    "getMute": "read",
+    "getOwnId": "read",
+    "getPendingGroupMembers": "read",
+    "getPinConversations": "read",
+    "getPollDetail": "read",
+    "getProductCatalogList": "read",
+    "getQR": "read",
+    "getQuickMessageList": "read",
+    "getRelatedFriendGroup": "read",
+    "getReminder": "read",
+    "getReminderResponses": "read",
+    "getSentFriendRequest": "read",
+    "getSettings": "read",
+    "getStickerCategoryDetail": "read",
+    "getStickers": "read",
+    "getStickersDetail": "read",
+    "getUnreadMark": "read",
+    "getUserInfo": "read",
+    "inviteUserToGroups": "manage",
+    "joinGroupInviteBox": "manage",
+    "joinGroupLink": "manage",
+    "keepAlive": "read",
+    "lastOnline": "read",
+    "leaveGroup": "destructive",
+    "lockPoll": "interact",
+    "parseLink": "send",
+    "rejectFriendRequest": "manage",
+    "removeFriend": "destructive",
+    "removeFriendAlias": "manage",
+    "removeGroupBlockedMember": "manage",
+    "removeGroupDeputy": "manage",
+    "removeQuickMessage": "destructive",
+    "removeReminder": "destructive",
+    "removeUnreadMark": "manage",
+    "removeUserFromGroup": "destructive",
+    "resetHiddenConversPin": "destructive",
+    "reuseAvatar": "manage",
+    "reviewPendingMemberRequest": "manage",
+    "searchSticker": "read",
+    "sendBankCard": "send",
+    "sendCard": "send",
+    "sendDeliveredEvent": "interact",
+    "sendFriendRequest": "manage",
+    "sendLink": "send",
+    "sendMessage": "send",
+    "sendReport": "send",
+    "sendSeenEvent": "interact",
+    "sendSticker": "send",
+    "sendTypingEvent": "send",
+    "sendVideo": "send",
+    "sendVoice": "send",
+    "setHiddenConversations": "manage",
+    "setMute": "manage",
+    "setPinnedConversations": "manage",
+    "sharePoll": "interact",
+    "unblockUser": "manage",
+    "undo": "interact",
+    "undoFriendRequest": "manage",
+    "updateActiveStatus": "manage",
+    "updateArchivedChatList": "manage",
+    "updateAutoDeleteChat": "manage",
+    "updateAutoReply": "manage",
+    "updateCatalog": "manage",
+    "updateGroupSettings": "manage",
+    "updateHiddenConversPin": "destructive",
+    "updateLabels": "manage",
+    "updateLang": "destructive",
+    "updateProductCatalog": "manage",
+    "updateProfile": "destructive",
+    "updateProfileBio": "destructive",
+    "updateQuickMessage": "manage",
+    "updateSettings": "destructive",
+    "upgradeGroupToCommunity": "destructive",
+    "uploadAttachment": "send",
+    "uploadProductPhoto": "manage",
+    "votePoll": "interact",
+}
 
 from gateway.platforms.base import (
     BasePlatformAdapter,
@@ -78,9 +230,9 @@ class ZaloAdapter(BasePlatformAdapter):
         extra = getattr(config, "extra", {}) or {}
 
         self.bridge_url = (
-            os.getenv("ZALO_BRIDGE_URL") or extra.get("bridge_url", "http://127.0.0.1:8787")
+            os.getenv("ZALO_PLUGIN_URL") or extra.get("bridge_url", "http://127.0.0.1:8787")
         ).rstrip("/")
-        self.bridge_token = os.getenv("ZALO_BRIDGE_TOKEN") or extra.get("bridge_token", "")
+        self.bridge_token = os.getenv("ZALO_PLUGIN_TOKEN") or extra.get("bridge_token", "")
 
         # ── Access control (Telegram-style: empty list = allow everyone) ──────
         # A) ALLOWED_USERS  — uids permitted to command the bot. Empty = all.
@@ -152,7 +304,7 @@ class ZaloAdapter(BasePlatformAdapter):
 
     async def connect(self) -> bool:
         if not self.bridge_url:
-            self._set_fatal_error("config_missing", "ZALO_BRIDGE_URL must be set", retryable=False)
+            self._set_fatal_error("config_missing", "ZALO_PLUGIN_URL must be set", retryable=False)
             return False
         try:
             import aiohttp  # noqa
@@ -184,7 +336,7 @@ class ZaloAdapter(BasePlatformAdapter):
         if not data.get("loggedIn"):
             qr = data.get("qr")
             msg = (
-                "Zalo bridge is running but not logged in. "
+                "Zalo plugin is running but not logged in. "
                 f"Scan the QR (bridge state: {qr}). See {self.bridge_url}/qr.png"
             )
             logger.error("Zalo: %s", msg)
@@ -775,22 +927,22 @@ def check_requirements() -> bool:
         import aiohttp  # noqa
     except ImportError:
         return False
-    return bool(os.getenv("ZALO_BRIDGE_URL"))
+    return bool(os.getenv("ZALO_PLUGIN_URL"))
 
 
 def validate_config(config) -> bool:
     extra = getattr(config, "extra", {}) or {}
-    return bool(os.getenv("ZALO_BRIDGE_URL") or extra.get("bridge_url"))
+    return bool(os.getenv("ZALO_PLUGIN_URL") or extra.get("bridge_url"))
 
 
 def _env_enablement() -> Optional[dict]:
     """Seed PlatformConfig.extra from env so env-only setups show in status."""
-    bridge_url = os.getenv("ZALO_BRIDGE_URL")
+    bridge_url = os.getenv("ZALO_PLUGIN_URL")
     if not bridge_url:
         return None
     extra = {
         "bridge_url": bridge_url.rstrip("/"),
-        "bridge_token": os.getenv("ZALO_BRIDGE_TOKEN", ""),
+        "bridge_token": os.getenv("ZALO_PLUGIN_TOKEN", ""),
     }
     result: Dict[str, Any] = {"extra": extra}
     home = os.getenv("ZALO_HOME_CHANNEL")
@@ -799,6 +951,50 @@ def _env_enablement() -> Optional[dict]:
         if chat_id:
             result["home_channel"] = {"chat_id": chat_id, "chat_type": "group" if thread_type == "group" else "dm"}
     return result
+
+
+def _probe_health(bridge_url: str, token: str) -> Optional[Dict[str, Any]]:
+    """GET /health → {loggedIn, sessionDead, ...} or None if unreachable.
+
+    Distinguishes the two failure modes the user must act on differently:
+      - None            → bridge process is DOWN (service stopped / never started)
+      - {loggedIn:False}→ bridge is UP but the Zalo session is logged out/expired
+    """
+    try:
+        import urllib.request
+        import json as _json
+        req = urllib.request.Request(f"{bridge_url}/health")
+        if token:
+            req.add_header("x-bridge-token", token)
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return _json.loads(r.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _bridge_cli_hint() -> str:
+    """Best-effort name of the bridge CLI for copy-paste hints."""
+    import shutil
+    if shutil.which("hermes-zalo-plugin"):
+        return "hermes-zalo-plugin"
+    return "npx hermes-zalo-plugin"  # works without a global install
+
+
+def _run_bridge_login() -> bool:
+    """Run the bridge's QR login interactively (blocks until scanned/failed).
+
+    Returns True on success. Uses the installed CLI if present, else npx.
+    """
+    import subprocess
+    import shutil
+    cli = "hermes-zalo-plugin" if shutil.which("hermes-zalo-plugin") else None
+    cmd = [cli, "login"] if cli else ["npx", "hermes-zalo-plugin", "login"]
+    try:
+        # Inherit stdio so the ASCII QR renders and the user can scan it.
+        return subprocess.run(cmd).returncode == 0
+    except Exception as e:
+        logger.warning("Zalo: could not launch bridge login: %s", e)
+        return False
 
 
 def _fetch_contacts(bridge_url: str, token: str) -> Optional[Dict[str, Any]]:
@@ -908,10 +1104,10 @@ def interactive_setup() -> None:
     print_header("Zalo")
     print_info("Connect Hermes to a personal Zalo account via the zca-js bridge.")
     print_warning("zca-js is an UNOFFICIAL API. Use a secondary account; Zalo may lock automated accounts.")
-    print_info("You must run the companion hermes-zalo-bridge Node service and log in via QR first.")
+    print_info("You must run the companion hermes-zalo-plugin Node service and log in via QR first.")
     print()
 
-    existing = get_env_value("ZALO_BRIDGE_URL")
+    existing = get_env_value("ZALO_PLUGIN_URL")
     bridge_url = prompt(
         "Bridge URL (e.g. http://127.0.0.1:8787)",
         default=existing or "http://127.0.0.1:8787",
@@ -919,20 +1115,70 @@ def interactive_setup() -> None:
     if not bridge_url:
         print_warning("Bridge URL is required — skipping Zalo setup")
         return
-    save_env_value("ZALO_BRIDGE_URL", bridge_url.strip().rstrip("/"))
+    save_env_value("ZALO_PLUGIN_URL", bridge_url.strip().rstrip("/"))
 
     if prompt_yes_no("Set a bridge token (shared secret)?", False):
         token = prompt("Bridge token", password=True)
         if token:
-            save_env_value("ZALO_BRIDGE_TOKEN", token)
+            save_env_value("ZALO_PLUGIN_TOKEN", token)
 
     print()
     print_info("Access control: WHO may talk to the bot (Telegram-style)")
     print_info("Leave selections EMPTY to allow everyone / everywhere.")
 
+    # Probe the bridge first so we can give a precise, actionable diagnosis
+    # instead of a vague "offline/not logged in". Three states matter:
+    #   1) DOWN          → service stopped: offer to start it (safe, no QR)
+    #   2) LOGGED OUT    → session expired: offer to QR-login right now
+    #   3) OK            → auto-list contacts for number-pick
+    bridge = bridge_url.strip().rstrip("/")
+    token = os.getenv("ZALO_PLUGIN_TOKEN", "")
+    cli = _bridge_cli_hint()
+    health = _probe_health(bridge, token)
+
+    if health is None:
+        # State 1: bridge process not reachable.
+        print()
+        print_warning(f"Bridge không phản hồi tại {bridge} (service đang tắt hoặc chưa khởi động).")
+        print_info("Phiên đăng nhập (credentials) vẫn được giữ — chỉ cần bật lại service, KHÔNG cần quét QR lại.")
+        if prompt_yes_no("Bật lại background service ngay bây giờ?", True):
+            import subprocess, shutil
+            svc_cli = "hermes-zalo-plugin" if shutil.which("hermes-zalo-plugin") else None
+            svc_cmd = [svc_cli, "setup", "--service-only"] if svc_cli else ["npx", "hermes-zalo-plugin", "setup", "--service-only"]
+            try:
+                subprocess.run(svc_cmd)
+            except Exception as e:
+                print_warning(f"Không tự bật được service: {e}")
+            # Re-probe after the attempt.
+            import time as _t
+            _t.sleep(2)
+            health = _probe_health(bridge, token)
+            if health is None:
+                print_warning("Bridge vẫn chưa lên. Bật thủ công rồi chạy lại `hermes gateway setup`:")
+                print_info(f"   {cli} setup --service-only        # nếu cài qua npm")
+                print_info("   npm start                         # nếu chạy từ source")
+        else:
+            print_info("Bỏ qua. Khi nào muốn bật: " + f"{cli} setup --service-only  (hoặc `npm start`)")
+
+    if health is not None and (not health.get("loggedIn") or health.get("sessionDead")):
+        # State 2: bridge is up but the Zalo session is dead/logged out.
+        print()
+        print_warning("Bridge đang chạy nhưng phiên Zalo đã ĐĂNG XUẤT / hết hạn.")
+        print_info("Cần đăng nhập lại bằng cách quét mã QR trong app Zalo (Zalo → + → Quét mã QR).")
+        if prompt_yes_no("Quét QR đăng nhập lại ngay bây giờ?", True):
+            if _run_bridge_login():
+                print_info("✓ Đăng nhập lại thành công.")
+                import time as _t
+                _t.sleep(2)
+                health = _probe_health(bridge, token)
+            else:
+                print_warning(f"Đăng nhập chưa xong. Chạy lại sau bằng:  {cli} login")
+        else:
+            print_info(f"Khi nào muốn đăng nhập lại:  {cli} login   (rồi chạy lại `hermes gateway setup`)")
+
     # Try to fetch a friendly id+name list from the bridge so the user can pick
     # by number instead of hunting for raw IDs. Falls back to manual entry.
-    contacts = _fetch_contacts(bridge_url.strip().rstrip("/"), os.getenv("ZALO_BRIDGE_TOKEN", ""))
+    contacts = _fetch_contacts(bridge, token) if (health and health.get("loggedIn") and not health.get("sessionDead")) else None
 
     # A) Allowed senders (users).
     friends = (contacts or {}).get("friends") or []
@@ -943,8 +1189,6 @@ def interactive_setup() -> None:
             prompt, print_info,
         )
     else:
-        if contacts is None:
-            print_warning("Could not auto-list friends (bridge offline/not logged in). Enter uids manually.")
         users_csv = prompt(
             "Allowed user IDs (comma-separated uidFrom, blank = everyone)",
             default=get_env_value("ZALO_ALLOWED_USERS") or "",
@@ -966,16 +1210,27 @@ def interactive_setup() -> None:
         )
     save_env_value("ZALO_ALLOWED_THREADS", (threads_csv or "").strip())
 
-    # C) Group response mode.
+    # C) Group response mode — pick by number instead of typing the word.
     print_info("In GROUPS, when should the bot respond?")
-    print_info("  mention = only when @mentioned or replied-to (recommended)")
-    print_info("  all     = every message in allowed groups")
-    print_info("  off     = never in groups (DM only)")
-    mode = prompt("Group mode (mention/all/off)", default=get_env_value("ZALO_GROUP_MODE") or "mention")
-    mode = (mode or "mention").strip().lower()
-    if mode not in {"mention", "all", "off"}:
-        mode = "mention"
+    _gm_opts = [
+        ("mention", "Chỉ khi được @nhắc tên hoặc trả lời tin của bot (khuyên dùng)"),
+        ("all", "Mọi tin nhắn trong các nhóm được phép"),
+        ("off", "Không bao giờ trong nhóm (chỉ chat riêng/DM)"),
+    ]
+    for i, (val, desc) in enumerate(_gm_opts, 1):
+        print_info(f"   {i}. {val:<8} — {desc}")
+    _cur_mode = get_env_value("ZALO_GROUP_MODE") or "mention"
+    _cur_idx = next((str(i) for i, (v, _) in enumerate(_gm_opts, 1) if v == _cur_mode), "1")
+    _pick = prompt("Chọn (1/2/3)", default=_cur_idx)
+    try:
+        mode = _gm_opts[int(str(_pick).strip()) - 1][0]
+    except (ValueError, IndexError):
+        # Fall back to accepting the literal word, else default.
+        mode = (str(_pick) or "").strip().lower()
+        if mode not in {"mention", "all", "off"}:
+            mode = "mention"
     save_env_value("ZALO_GROUP_MODE", mode)
+    print_info(f"   → {mode}")
 
     # Discoverability helper: log inbound ids so the user can add more later.
     if prompt_yes_no("Log sender/thread IDs of incoming messages (to find IDs later)?", False):
@@ -996,36 +1251,100 @@ def interactive_setup() -> None:
             print_warning("Invalid number — keeping default 30 days")
 
     print()
-    print_info("🔐 Access control — which Zalo actions the agent may perform")
-    print_info("   Groups by danger level: read < send < interact < manage < destructive")
-    print_info("   read=xem, send=gửi tin/ảnh/file, interact=react/reply/poll,")
-    print_info("   manage=quản lý nhóm/bạn, destructive=giải tán nhóm/xoá/block/đổi profile")
-    groups = prompt(
-        "Allowed action groups (comma-separated, or 'all')",
-        default=get_env_value("ZALO_ALLOWED_ACTION_GROUPS") or "read,send,interact",
-    )
-    if groups and groups.strip():
-        save_env_value("ZALO_ALLOWED_ACTION_GROUPS", groups.strip())
+    print_info("🔐 Access control — bot được phép làm những NHÓM hành động nào?")
+    print_info("   Mức độ nguy hiểm tăng dần: read < send < interact < manage < destructive")
+    _ag_opts = [
+        ("read", "Xem — đọc tin, danh bạ, thông tin nhóm/bạn"),
+        ("send", "Gửi — nhắn tin, ảnh, file, sticker, voice"),
+        ("interact", "Tương tác — react, reply, vote/poll, gõ '...'"),
+        ("manage", "Quản lý — thêm/xoá thành viên, đổi tên nhóm, kết bạn"),
+        ("destructive", "NGUY HIỂM — giải tán nhóm, xoá tin, block, rời nhóm, đổi profile"),
+    ]
+    for i, (val, desc) in enumerate(_ag_opts, 1):
+        print_info(f"   {i}. {val:<12} — {desc}")
+    print_info("   6. custom       — Tự chọn TỪNG action cụ thể (chỉ những cái chọn mới chạy, còn lại CHẶN hết)")
+    # Default to the currently-saved set, else the safe preset read,send,interact (1,2,3).
+    _raw_groups = (get_env_value("ZALO_ALLOWED_ACTION_GROUPS") or "").strip()
+    _raw_allowed = (get_env_value("ZALO_ALLOWED_ACTIONS") or "").strip()
+    # Whitelist mode = an explicit allowlist exists AND no groups are enabled.
+    _cur_custom = bool(_raw_allowed) and not _raw_groups
+    _cur = _raw_groups or "read,send,interact"
+    if _cur_custom:
+        _cur_nums = "6"
+    elif _cur.lower() == "all":
+        _cur_nums = "1,2,3,4,5"
+    else:
+        _cur_set = {s.strip() for s in _cur.split(",") if s.strip()}
+        _cur_nums = ",".join(str(i) for i, (v, _) in enumerate(_ag_opts, 1) if v in _cur_set) or "1,2,3"
+    print_info("   Nhập số cách nhau bởi dấu phẩy (vd: 1,2,3), 'all' cho tất cả, hoặc 6 để tự chọn từng action.")
+    _pick = prompt("Chọn nhóm hành động", default=_cur_nums)
+    _pick = (str(_pick) or "").strip()
 
-    print_warning(
-        "⚠️  DESTRUCTIVE actions (giải tán nhóm, xoá tin, block, đổi profile) are "
-        "irreversible. Anyone the bot listens to could trigger them. Only enable "
-        "if you fully trust every authorized user."
-    )
-    allow_destructive = prompt_yes_no("Allow DESTRUCTIVE actions?", False)
-    save_env_value("ZALO_ALLOW_DESTRUCTIVE", "true" if allow_destructive else "false")
+    _pick_nums = {t.strip() for t in _pick.split(",")}
+    if "6" in _pick_nums or _pick.lower() == "custom":
+        # ── Custom mode: whitelist-only. Pick specific actions; everything else
+        #    is denied. We clear ZALO_ALLOWED_ACTION_GROUPS so no group passes by
+        #    default, and put the picks in ZALO_ALLOWED_ACTIONS.
+        print()
+        print_info("Chế độ CUSTOM (whitelist) — chỉ những action được chọn mới chạy, tất cả còn lại bị chặn.")
+        action_items = [
+            {"id": name, "name": f"{name}  [{grp}]"}
+            for name, grp in sorted(_ACTION_GROUP.items())
+        ]
+        # Seed the picker default selection from any currently-saved allowlist.
+        _picked_csv = _pick_ids(
+            action_items,
+            f"Chọn action cho phép (trong {len(action_items)} API). "
+            "Gõ tên để tìm (vd: send, group, poll), số để tick, 'all' để liệt kê, blank=xong",
+            prompt, print_info,
+        )
+        allowed = [a.strip() for a in (_picked_csv or "").split(",") if a.strip()]
+        save_env_value("ZALO_ALLOWED_ACTIONS", ",".join(allowed))
+        save_env_value("ZALO_ALLOWED_ACTION_GROUPS", "")  # whitelist-only
+        save_env_value("ZALO_DENIED_ACTIONS", "")          # not needed in whitelist mode
+        # If any picked action is destructive, the bridge still needs the opt-in.
+        has_destructive = any(_ACTION_GROUP.get(a) == "destructive" for a in allowed)
+        if has_destructive:
+            print_warning(
+                "⚠️  Một số action đã chọn thuộc nhóm NGUY HIỂM (destructive). "
+                "Bridge cần bật cờ riêng mới chạy được chúng."
+            )
+            allow_destructive = prompt_yes_no("Cho phép các action NGUY HIỂM đã chọn?", False)
+            save_env_value("ZALO_ALLOW_DESTRUCTIVE", "true" if allow_destructive else "false")
+        else:
+            save_env_value("ZALO_ALLOW_DESTRUCTIVE", "false")
+        print_info(f"   → custom allowlist ({len(allowed)} action): {', '.join(allowed) or '(trống — bot sẽ không làm gì)'}")
+    else:
+        if _pick.lower() == "all":
+            groups_val = "all"
+        else:
+            chosen = []
+            for tok in _pick.split(","):
+                tok = tok.strip()
+                if not tok or tok == "6":
+                    continue
+                try:
+                    chosen.append(_ag_opts[int(tok) - 1][0])
+                except (ValueError, IndexError):
+                    if tok.lower() in {v for v, _ in _ag_opts}:
+                        chosen.append(tok.lower())  # accept literal names too
+            groups_val = ",".join(dict.fromkeys(chosen)) or "read,send,interact"
+        save_env_value("ZALO_ALLOWED_ACTION_GROUPS", groups_val)
+        save_env_value("ZALO_ALLOWED_ACTIONS", "")  # clear any leftover custom allowlist
+        print_info(f"   → {groups_val}")
 
-    if prompt_yes_no("Set a custom allow/deny list for specific actions?", False):
-        allow_list = prompt(
-            "Always-ALLOW these methods (comma-separated zca-js names, optional)",
-            default=get_env_value("ZALO_ALLOWED_ACTIONS") or "",
-        )
-        save_env_value("ZALO_ALLOWED_ACTIONS", (allow_list or "").strip())
-        deny_list = prompt(
-            "Always-DENY these methods (comma-separated, highest precedence, optional)",
-            default=get_env_value("ZALO_DENIED_ACTIONS") or "",
-        )
-        save_env_value("ZALO_DENIED_ACTIONS", (deny_list or "").strip())
+        # Destructive opt-in only matters when not in whitelist mode.
+        _has_destructive_group = groups_val == "all" or "destructive" in groups_val
+        if _has_destructive_group:
+            print_warning(
+                "⚠️  DESTRUCTIVE actions (giải tán nhóm, xoá tin, block, đổi profile) là "
+                "KHÔNG THỂ HOÀN TÁC. Bất kỳ ai bot nghe đều có thể kích hoạt. Chỉ bật nếu "
+                "bạn hoàn toàn tin tưởng mọi người được phép."
+            )
+            allow_destructive = prompt_yes_no("Cho phép các action NGUY HIỂM (destructive)?", False)
+            save_env_value("ZALO_ALLOW_DESTRUCTIVE", "true" if allow_destructive else "false")
+        else:
+            save_env_value("ZALO_ALLOW_DESTRUCTIVE", "false")
 
     home = prompt(
         "Home thread for cron delivery (threadId or group:threadId, optional)",
@@ -1034,10 +1353,25 @@ def interactive_setup() -> None:
     if home:
         save_env_value("ZALO_HOME_CHANNEL", home.strip())
 
+    # ── Next steps: make sure the user always knows how to get a working bot ──
+    print()
+    print_info("─────────────────────────────────────────────")
+    if health and health.get("loggedIn") and not health.get("sessionDead"):
+        print_info("✓ Zalo đã sẵn sàng: bridge đang chạy và đã đăng nhập.")
+        print_info("  Chạy:  hermes gateway   → bắt đầu nhận/gửi tin Zalo.")
+    else:
+        print_warning("⚠ Cấu hình Zalo đã lưu, NHƯNG bridge chưa sẵn sàng — bot sẽ chưa hoạt động.")
+        print_info("  Bridge (Node service) phải ĐANG CHẠY và đã đăng nhập thì bot mới chạy được.")
+        print_info(f"  • Kiểm tra:        curl {bridge}/health")
+        print_info(f"  • Bật service:     {cli} setup --service-only   (đã login thì không cần QR)")
+        print_info(f"  • Đăng nhập QR:    {cli} login                  (nếu bị đăng xuất)")
+        print_info("  Xong rồi chạy:  hermes gateway")
+    print_info("─────────────────────────────────────────────")
+
 
 def is_connected() -> bool:
     """Lightweight check used by `hermes gateway status` (env-only)."""
-    return bool(os.getenv("ZALO_BRIDGE_URL"))
+    return bool(os.getenv("ZALO_PLUGIN_URL"))
 
 
 def register(ctx):
@@ -1048,8 +1382,8 @@ def register(ctx):
         adapter_factory=lambda cfg: ZaloAdapter(cfg),
         check_fn=check_requirements,
         validate_config=validate_config,
-        required_env=["ZALO_BRIDGE_URL"],
-        install_hint="Run the hermes-zalo-bridge Node service and `pip install aiohttp`",
+        required_env=["ZALO_PLUGIN_URL"],
+        install_hint="Run the hermes-zalo-plugin Node service and `pip install aiohttp`",
         setup_fn=interactive_setup,
         env_enablement_fn=_env_enablement,
         cron_deliver_env_var="ZALO_HOME_CHANNEL",

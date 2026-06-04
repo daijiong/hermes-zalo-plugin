@@ -1,4 +1,4 @@
-// install.mjs — one-shot, cross-platform installer for the Hermes Zalo bridge.
+// install.mjs — one-shot, cross-platform installer for the Hermes Zalo plugin.
 // Runs the same on macOS, Linux, and Windows (Node drives everything; only the
 // service-manager step branches per-OS).
 //
@@ -26,7 +26,7 @@ const SERVICE_ONLY = has("--service-only");
 const PLATFORM = process.platform; // 'darwin' | 'linux' | 'win32'
 const NODE_BIN = process.execPath;
 const SERVER_JS = path.join(__dirname, "server.js");
-const LABEL = "com.hermes.zalobridge";
+const LABEL = "com.hermes.zaloplugin";
 
 function log(msg) { console.log(msg); }
 function step(n, msg) { console.log(`\n[${n}] ${msg}`); }
@@ -127,7 +127,7 @@ function installServiceLinux() {
   fs.mkdirSync(unitDir, { recursive: true });
   const unitPath = path.join(unitDir, `${LABEL}.service`);
   const unit = `[Unit]
-Description=Hermes Zalo Bridge
+Description=Hermes Zalo Plugin
 After=network-online.target
 
 [Service]
@@ -156,7 +156,7 @@ WantedBy=default.target
 function installServiceWindows() {
   // Scheduled Task that runs at logon and restarts on failure. Avoids needing
   // nssm/admin service install. Uses schtasks (present on all Windows).
-  const taskName = "HermesZaloBridge";
+  const taskName = "HermesZaloPlugin";
   // Wrap in a tiny launcher so cwd is correct.
   const cmd = `"${NODE_BIN}" "${SERVER_JS}"`;
   const args = [
@@ -201,7 +201,7 @@ function installHermesPlugin() {
   const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), ".hermes");
   if (!fs.existsSync(hermesHome)) {
     log(`⚠ Hermes home not found at ${hermesHome}. Is Hermes installed?`);
-    log("  Skipping plugin install. After installing Hermes, re-run: npx hermes-zalo-bridge setup --service-only");
+    log("  Skipping plugin install. After installing Hermes, re-run: npx hermes-zalo-plugin setup --service-only");
     return;
   }
   const dest = path.join(hermesHome, "plugins", "zalo");
@@ -283,10 +283,10 @@ function enableZaloInConfig(cfgPath) {
 }
 
 function nextSteps() {
-  const port = process.env.ZALO_BRIDGE_PORT || "8787";
+  const port = process.env.ZALO_PLUGIN_PORT || "8787";
   console.log(`
 ────────────────────────────────────────────────────────
-✓ Zalo bridge is set up.
+✓ Zalo plugin is set up.
 
   Bridge URL:  http://127.0.0.1:${port}
   Health:      curl http://127.0.0.1:${port}/health
@@ -313,14 +313,14 @@ function banner() {
     blue("  ╦ ╦┌─┐┬─┐┌┬┐┌─┐┌─┐  ") + cyan("╔═╗┌─┐┬  ┌─┐") + "\n" +
     blue("  ╠═╣├┤ ├┬┘│││├┤ └─┐  ") + cyan("╔═╝├─┤│  │ │") + "\n" +
     blue("  ╩ ╩└─┘┴└─┴ ┴└─┘└─┘  ") + cyan("╚═╝┴ ┴┴─┘└─┘") + "\n" +
-    dim("        H e r m e s   ×   Z a l o   b r i d g e") + "\n" +
+    dim("        H e r m e s   ×   Z a l o   p l u g i n") + "\n" +
     dim("        chat with your Hermes agent from Zalo  🇻🇳") + "\n",
   );
 }
 
 async function main() {
   banner();
-  console.log("Hermes Zalo Bridge — installer");
+  console.log("Hermes Zalo Plugin — installer");
   console.log("(Safe to re-run: deps are upserted, login is skipped if already logged in,");
   console.log(" and the background service is re-registered cleanly.)\n");
   checkPrereqs();

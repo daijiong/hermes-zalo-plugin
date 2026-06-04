@@ -8,7 +8,7 @@ name: Publish to npm
 #   1. Publish v1.0.0 manually once (npmjs requires the package to exist before
 #      you can enable trusted publishing for it).
 #   2. On npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions,
-#      set: repo = cuongdev/hermes-zalo-bridge, workflow file = publish.yml.
+#      set: repo = cuongdev/hermes-zalo-plugin, workflow file = publish.yml.
 #   3. From then on, pushing a v* tag publishes automatically — no NPM_TOKEN.
 on:
   push:

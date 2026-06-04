@@ -1,11 +1,11 @@
-# hermes-zalo-bridge
+# hermes-zalo-plugin
 
 [English](./README.md) · 📖 **Tiếng Việt**
 
-[![npm version](https://img.shields.io/npm/v/hermes-zalo-bridge.svg)](https://www.npmjs.com/package/hermes-zalo-bridge)
-[![npm downloads](https://img.shields.io/npm/dm/hermes-zalo-bridge.svg)](https://www.npmjs.com/package/hermes-zalo-bridge)
-[![GitHub stars](https://img.shields.io/github/stars/cuongdev/hermes-zalo-bridge?style=social)](https://github.com/cuongdev/hermes-zalo-bridge/stargazers)
-[![license](https://img.shields.io/npm/l/hermes-zalo-bridge.svg)](./LICENSE)
+[![npm version](https://img.shields.io/npm/v/hermes-zalo-plugin.svg)](https://www.npmjs.com/package/hermes-zalo-plugin)
+[![npm downloads](https://img.shields.io/npm/dm/hermes-zalo-plugin.svg)](https://www.npmjs.com/package/hermes-zalo-plugin)
+[![GitHub stars](https://img.shields.io/github/stars/cuongdev/hermes-zalo-plugin?style=social)](https://github.com/cuongdev/hermes-zalo-plugin/stargazers)
+[![license](https://img.shields.io/npm/l/hermes-zalo-plugin.svg)](./LICENSE)
 
 Cầu nối (bridge) Node.js kết nối **zca-js** (API Zalo cá nhân KHÔNG chính thức)
 với gateway của **Hermes Agent**. Nhờ nó, bạn có thể chat với Hermes agent từ
@@ -102,9 +102,9 @@ Bạn cũng có thể lấy QR trong lúc server đang chạy:
 
 | Biến | Mặc định | Ý nghĩa |
 |------|----------|---------|
-| `ZALO_BRIDGE_PORT` | `8787` | Cổng lắng nghe |
-| `ZALO_BRIDGE_HOST` | `127.0.0.1` | Host bind (giữ loopback trừ khi bạn thêm TLS) |
-| `ZALO_BRIDGE_TOKEN` | _(trống)_ | Khóa bí mật dùng chung; nếu đặt, mọi route đều yêu cầu (header `x-bridge-token`, `Authorization: Bearer`, hoặc `?token=`) |
+| `ZALO_PLUGIN_PORT` | `8787` | Cổng lắng nghe |
+| `ZALO_PLUGIN_HOST` | `127.0.0.1` | Host bind (giữ loopback trừ khi bạn thêm TLS) |
+| `ZALO_PLUGIN_TOKEN` | _(trống)_ | Khóa bí mật dùng chung; nếu đặt, mọi route đều yêu cầu (header `x-bridge-token`, `Authorization: Bearer`, hoặc `?token=`) |
 | `ZALO_CREDENTIALS_PATH` | `./data/credentials.json` | Nơi lưu credentials |
 | `ZALO_QR_PATH` | `./data/qr.png` | Nơi ghi ảnh QR |
 | `ZALO_SELF_LISTEN` | tắt | Nhận cả tin nhắn do chính mình gửi đi |
@@ -220,7 +220,7 @@ và thời gian giữ cache. Tất cả ghi vào `~/.hermes/.env`.
 ### Cách B — đặt env thủ công
 
 ```bash
-export ZALO_BRIDGE_URL="http://127.0.0.1:8787"
+export ZALO_PLUGIN_URL="http://127.0.0.1:8787"
 # Phân quyền (kiểu Telegram: để trống = cho phép tất cả / mọi nơi)
 # export ZALO_ALLOWED_USERS="<uid1>,<uid2>"      # giới hạn người gửi
 # export ZALO_ALLOWED_THREADS="<groupId>,<uid>"  # giới hạn nhóm/chat 1-1
@@ -279,4 +279,4 @@ MIT © [Cường Tuấn Nguyễn](https://github.com/cuongdev)
 
 Nếu dự án giúp ích cho bạn, một ⭐ sẽ giúp người khác tìm thấy nó.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=cuongdev/hermes-zalo-bridge&type=Date)](https://star-history.com/#cuongdev/hermes-zalo-bridge&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=cuongdev/hermes-zalo-plugin&type=Date)](https://star-history.com/#cuongdev/hermes-zalo-plugin&Date)

@@ -7,18 +7,18 @@ description: >
   Bridges to a separate Node.js process running zca-js (unofficial Zalo
   personal API) over a localhost HTTP/SSE bridge. Receives Zalo messages
   (1-1 and group) and sends text, images, files, stickers, and voice back.
-  Requires the companion hermes-zalo-bridge Node service to be running and
+  Requires the companion hermes-zalo-plugin Node service to be running and
   logged in (via QR). NOTE: zca-js is an UNOFFICIAL API — use a secondary
   account; Zalo may rate-limit or lock automated accounts.
 author: cuong
 requires_env:
-  - name: ZALO_BRIDGE_URL
+  - name: ZALO_PLUGIN_URL
     description: "Base URL of the running zca-js bridge (e.g. http://127.0.0.1:8787)"
-    prompt: "Zalo bridge URL"
+    prompt: "Zalo plugin URL"
     password: false
 optional_env:
-  - name: ZALO_BRIDGE_TOKEN
-    description: "Shared secret for the bridge (must match ZALO_BRIDGE_TOKEN on the bridge)"
+  - name: ZALO_PLUGIN_TOKEN
+    description: "Shared secret for the bridge (must match ZALO_PLUGIN_TOKEN on the bridge)"
     prompt: "Bridge token (optional)"
     password: true
   - name: ZALO_ALLOWED_USERS

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — Hermes Zalo bridge installer for macOS / Linux.
+# install.sh — Hermes Zalo plugin installer for macOS / Linux.
 # Thin wrapper: verifies Node is present, then hands off to install.mjs
 # (which does deps → QR login → background service, cross-platform).
 #

@@ -1,11 +1,11 @@
-# hermes-zalo-bridge
+# hermes-zalo-plugin
 
 📖 **English** · [Tiếng Việt](./README.vi.md)
 
-[![npm version](https://img.shields.io/npm/v/hermes-zalo-bridge.svg)](https://www.npmjs.com/package/hermes-zalo-bridge)
-[![npm downloads](https://img.shields.io/npm/dm/hermes-zalo-bridge.svg)](https://www.npmjs.com/package/hermes-zalo-bridge)
-[![GitHub stars](https://img.shields.io/github/stars/cuongdev/hermes-zalo-bridge?style=social)](https://github.com/cuongdev/hermes-zalo-bridge/stargazers)
-[![license](https://img.shields.io/npm/l/hermes-zalo-bridge.svg)](./LICENSE)
+[![npm version](https://img.shields.io/npm/v/hermes-zalo-plugin.svg)](https://www.npmjs.com/package/hermes-zalo-plugin)
+[![npm downloads](https://img.shields.io/npm/dm/hermes-zalo-plugin.svg)](https://www.npmjs.com/package/hermes-zalo-plugin)
+[![GitHub stars](https://img.shields.io/github/stars/cuongdev/hermes-zalo-plugin?style=social)](https://github.com/cuongdev/hermes-zalo-plugin/stargazers)
+[![license](https://img.shields.io/npm/l/hermes-zalo-plugin.svg)](./LICENSE)
 
 Node.js bridge connecting **zca-js** (unofficial personal Zalo API) to the
 **Hermes Agent** gateway. It lets you chat with your Hermes agent from a
@@ -48,8 +48,8 @@ build-from-source (zca-js is pulled from npm).
 **Install from npm (recommended):**
 
 ```bash
-npm install -g hermes-zalo-bridge
-hermes-zalo-bridge setup      # QR login + background service
+npm install -g hermes-zalo-plugin
+hermes-zalo-plugin setup      # QR login + background service
 ```
 
 **Or from a source checkout:**
@@ -70,7 +70,7 @@ The setup step:
    and restarts it on crash — launchd (macOS), systemd user unit (Linux), or a
    Scheduled Task (Windows).
 
-CLI commands: `hermes-zalo-bridge setup | login | start | stop | status | uninstall`.
+CLI commands: `hermes-zalo-plugin setup | login | start | stop | status | uninstall`.
 
 Then register it in Hermes:
 
@@ -113,9 +113,9 @@ You can also fetch the QR while the server runs:
 
 | Var | Default | Meaning |
 |-----|---------|---------|
-| `ZALO_BRIDGE_PORT` | `8787` | Listen port |
-| `ZALO_BRIDGE_HOST` | `127.0.0.1` | Bind host (keep loopback unless you add TLS) |
-| `ZALO_BRIDGE_TOKEN` | _(none)_ | Shared secret; if set, required on every route (header `x-bridge-token`, `Authorization: Bearer`, or `?token=`) |
+| `ZALO_PLUGIN_PORT` | `8787` | Listen port |
+| `ZALO_PLUGIN_HOST` | `127.0.0.1` | Bind host (keep loopback unless you add TLS) |
+| `ZALO_PLUGIN_TOKEN` | _(none)_ | Shared secret; if set, required on every route (header `x-bridge-token`, `Authorization: Bearer`, or `?token=`) |
 | `ZALO_CREDENTIALS_PATH` | `./data/credentials.json` | Where credentials persist |
 | `ZALO_QR_PATH` | `./data/qr.png` | Where the QR PNG is written |
 | `ZALO_SELF_LISTEN` | off | Receive your own outgoing messages too |
@@ -231,7 +231,7 @@ mode, action permissions, and cache retention. It writes everything to
 ### Option B — manual env
 
 ```bash
-export ZALO_BRIDGE_URL="http://127.0.0.1:8787"
+export ZALO_PLUGIN_URL="http://127.0.0.1:8787"
 # Access control (Telegram-style: leave empty = allow everyone/everywhere)
 # export ZALO_ALLOWED_USERS="<uid1>,<uid2>"      # restrict senders
 # export ZALO_ALLOWED_THREADS="<groupId>,<uid>"  # restrict groups/DMs
@@ -300,7 +300,7 @@ trusted publishing for it):
 2. On npmjs.com → your package → **Settings → Trusted Publisher → GitHub
    Actions**, set:
    - Organization/user: `cuongdev`
-   - Repository: `hermes-zalo-bridge`
+   - Repository: `hermes-zalo-plugin`
    - Workflow filename: `publish.yml`
 
 **After that**, releases are automatic and tokenless:
@@ -328,4 +328,4 @@ MIT © [Cường Tuấn Nguyễn](https://github.com/cuongdev)
 ## Star History
 
 If this saved you time, a ⭐ helps others find it —
-[**view the star history chart**](https://star-history.com/#cuongdev/hermes-zalo-bridge&Date).
+[**view the star history chart**](https://star-history.com/#cuongdev/hermes-zalo-plugin&Date).

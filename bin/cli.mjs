@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// bin/cli.mjs — CLI entry point for the hermes-zalo-bridge npm package.
+// bin/cli.mjs — CLI entry point for the hermes-zalo-plugin npm package.
 //
-//   hermes-zalo-bridge setup       # deps already installed by npm; login + service
-//   hermes-zalo-bridge login       # QR login (--force to re-scan)
-//   hermes-zalo-bridge start       # run the bridge in the foreground
-//   hermes-zalo-bridge stop        # stop the background service
-//   hermes-zalo-bridge status      # show bridge health + where data lives
-//   hermes-zalo-bridge uninstall   # remove background service (--purge to wipe creds)
+//   hermes-zalo-plugin setup       # deps already installed by npm; login + service
+//   hermes-zalo-plugin login       # QR login (--force to re-scan)
+//   hermes-zalo-plugin start       # run the bridge in the foreground
+//   hermes-zalo-plugin stop        # stop the background service
+//   hermes-zalo-plugin status      # show bridge health + where data lives
+//   hermes-zalo-plugin uninstall   # remove background service (--purge to wipe creds)
 //
 // Data (credentials, QR, undo-cache) lives in ~/.hermes-zalo/ by default
 // (override with ZALO_DATA_DIR), so a global install survives package updates.
@@ -30,18 +30,18 @@ function runNode(script, args = []) {
 }
 
 async function status() {
-  const port = process.env.ZALO_BRIDGE_PORT || "8787";
-  const host = process.env.ZALO_BRIDGE_HOST || "127.0.0.1";
+  const port = process.env.ZALO_PLUGIN_PORT || "8787";
+  const host = process.env.ZALO_PLUGIN_HOST || "127.0.0.1";
   console.log(`Data directory: ${dataDir()}`);
   try {
     const res = await fetch(`http://${host}:${port}/health`, { signal: AbortSignal.timeout(3000) });
     const j = await res.json();
     console.log(`Bridge: RUNNING on http://${host}:${port}`);
     console.log(`  loggedIn=${j.loggedIn} sessionDead=${j.sessionDead} ownId=${j.ownId || "-"}`);
-    if (j.sessionDead) console.log(`  ⚠ session dead: ${j.sessionDeadReason || "unknown"} — run 'hermes-zalo-bridge login --force' after stopping it.`);
+    if (j.sessionDead) console.log(`  ⚠ session dead: ${j.sessionDeadReason || "unknown"} — run 'hermes-zalo-plugin login --force' after stopping it.`);
   } catch {
     console.log(`Bridge: NOT running (no response on http://${host}:${port}).`);
-    console.log("  Start it with: hermes-zalo-bridge start   (or 'setup' for background service)");
+    console.log("  Start it with: hermes-zalo-plugin start   (or 'setup' for background service)");
   }
 }
 
@@ -56,13 +56,13 @@ function banner() {
     blue("  ╦ ╦┌─┐┬─┐┌┬┐┌─┐┌─┐  ") + cyan("╔═╗┌─┐┬  ┌─┐") + "\n" +
     blue("  ╠═╣├┤ ├┬┘│││├┤ └─┐  ") + cyan("╔═╝├─┤│  │ │") + "\n" +
     blue("  ╩ ╩└─┘┴└─┴ ┴└─┘└─┘  ") + cyan("╚═╝┴ ┴┴─┘└─┘") + "\n" +
-    dim("        H e r m e s   ×   Z a l o   b r i d g e  🇻🇳") + "\n",
+    dim("        H e r m e s   ×   Z a l o   p l u g i n  🇻🇳") + "\n",
   );
 }
 
 function help() {
   banner();
-  console.log(`Usage: hermes-zalo-bridge <command> [options]
+  console.log(`Usage: hermes-zalo-plugin <command> [options]
 
 Commands:
   setup        Log in (QR) if needed and install a background auto-start service

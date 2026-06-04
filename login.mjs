@@ -1,4 +1,4 @@
-// login.mjs — standalone QR login for the Zalo bridge.
+// login.mjs — standalone QR login for the Zalo plugin.
 // Cross-platform (macOS / Linux / Windows). Run once (or with --force to
 // re-login). Prints the QR in the terminal AND saves a PNG, then persists
 // credentials to the data dir (~/.hermes-zalo by default) so the bridge
@@ -41,8 +41,8 @@ function printQR(ev) {
 // open a second Zalo connection (Zalo kicks the old one — DuplicateConnection
 // 3000), so we skip login entirely.
 async function bridgeAlreadyLoggedIn() {
-  const port = process.env.ZALO_BRIDGE_PORT || "8787";
-  const host = process.env.ZALO_BRIDGE_HOST || "127.0.0.1";
+  const port = process.env.ZALO_PLUGIN_PORT || "8787";
+  const host = process.env.ZALO_PLUGIN_HOST || "127.0.0.1";
   try {
     const res = await fetch(`http://${host}:${port}/health`, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return false;

@@ -1,4 +1,4 @@
-# install.ps1 — Hermes Zalo bridge installer for Windows (PowerShell).
+# install.ps1 — Hermes Zalo plugin installer for Windows (PowerShell).
 # Thin wrapper: verifies Node is present, then hands off to install.mjs.
 #
 #   .\install.ps1                # full setup

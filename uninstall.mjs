@@ -1,4 +1,4 @@
-// uninstall.mjs — remove the background service for the Hermes Zalo bridge.
+// uninstall.mjs — remove the background service for the Hermes Zalo plugin.
 // Cross-platform. Optionally wipe saved credentials.
 //
 //   node uninstall.mjs              # stop + remove the auto-start service
@@ -12,7 +12,7 @@ import { credentialsPath } from "./paths.js";
 
 const PURGE = process.argv.includes("--purge");
 const PLATFORM = process.platform;
-const LABEL = "com.hermes.zalobridge";
+const LABEL = "com.hermes.zaloplugin";
 
 function log(m) { console.log(m); }
 
@@ -42,7 +42,7 @@ function removeServiceLinux() {
 }
 
 function removeServiceWindows() {
-  const taskName = "HermesZaloBridge";
+  const taskName = "HermesZaloPlugin";
   const r = spawnSync("schtasks", ["/Delete", "/F", "/TN", taskName], { stdio: "inherit", shell: true });
   if (r.status === 0) log(`✓ Removed Scheduled Task '${taskName}'.`);
   else log(`• No Scheduled Task '${taskName}' (or removal failed).`);
@@ -134,7 +134,7 @@ function purgeCredentials() {
   }
 }
 
-console.log("Hermes Zalo Bridge — uninstaller\n================================");
+console.log("Hermes Zalo Plugin — uninstaller\n================================");
 removeService();
 removeHermesPlugin();
 if (PURGE) purgeCredentials();
