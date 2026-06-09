@@ -10,6 +10,18 @@ import { Zalo, ThreadType, LoginQRCallbackEventType, Reactions } from "zca-js";
 const DEFAULT_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
 
+// Zalo drops idle/old sessions even while the websocket is technically open.
+// zca-js sends a WS-level ping (cmd:2) automatically, but never calls the
+// HTTP /keepalive endpoint — so we poke it ourselves to keep the session warm.
+const KEEPALIVE_INTERVAL_MS = 60_000;
+// When the listener permanently CLOSES on a non-fatal code, try to recover the
+// session automatically with the saved cookie (no QR) before giving up. Linear
+// backoff (attempt * base, capped); the budget is replenished on every healthy
+// reconnect (the "connected" event), so only a sustained outage exhausts it.
+const AUTO_RELOGIN_BASE_MS = 5_000;
+const AUTO_RELOGIN_MAX_MS = 60_000;
+const MAX_AUTO_RELOGIN_ATTEMPTS = 5;
+
 /**
  * Read image dimensions from a local file by parsing the header bytes.
  * Supports PNG, JPEG, GIF, WebP, BMP — no external deps. Returns null if
@@ -95,6 +107,12 @@ export class ZaloClient extends EventEmitter {
     this.sessionDead = false;
     this.sessionDeadReason = null;
     this._qrState = null; // { image, status } during a QR login flow
+    // Session keepalive + auto-recovery timers/state (see _startKeepAlive,
+    // _scheduleAutoRelogin). _reconnecting guards against overlapping attempts.
+    this._keepAliveTimer = null;
+    this._autoReloginTimer = null;
+    this._autoReloginAttempts = 0;
+    this._reconnecting = false;
     // Cache msgId -> { cliMsgId, ts } so undo() works without the caller
     // knowing the client id (zca-js generates clientId internally and doesn't
     // return it; the listener echo carries the real cliMsgId).
@@ -331,7 +349,7 @@ export class ZaloClient extends EventEmitter {
    * QR flow: writes the QR PNG, exposes base64 via qrState, resolves once the
    * phone confirms. Throws on hard failure.
    */
-  async login({ forceQR = false } = {}) {
+  async login({ forceQR = false, cookieOnly = false } = {}) {
     const zalo = new Zalo({
       // Always self-listen at the zca-js layer so we can capture the real
       // cliMsgId of our own sent messages (needed for undo). We still filter
@@ -350,8 +368,14 @@ export class ZaloClient extends EventEmitter {
         await this._afterLogin();
         return { method: "cookie" };
       } catch (e) {
-        console.error("[zalo] cookie login failed, falling back to QR:", e.message);
+        console.error("[zalo] cookie login failed:", e.message);
+        // Headless auto-relogin must NOT drop into an interactive QR flow that
+        // would block forever in a service. Surface the failure to the caller.
+        if (cookieOnly) throw e;
+        console.error("[zalo] falling back to QR.");
       }
+    } else if (cookieOnly) {
+      throw new Error("cookie relogin requested but no saved credentials");
     }
 
     // QR login. Renders a scannable QR + live countdown in the terminal when
@@ -479,6 +503,109 @@ export class ZaloClient extends EventEmitter {
     this._wireListeners();
     // retryOnClose: zca-js auto-reconnects the Zalo websocket on drop.
     this.api.listener.start({ retryOnClose: true });
+    this._startKeepAlive();
+  }
+
+  /**
+   * Periodically hit Zalo's HTTP /keepalive endpoint so the server doesn't
+   * expire an otherwise-quiet session. zca-js exposes api.keepAlive() but never
+   * calls it; only the WS-level ping (cmd:2) is automatic. Best-effort: a failed
+   * keepalive is logged, not fatal (a truly dead session surfaces via "closed").
+   */
+  _startKeepAlive() {
+    this._stopKeepAlive();
+    this._keepAliveTimer = setInterval(() => {
+      const api = this.api;
+      if (!api || typeof api.keepAlive !== "function") return;
+      Promise.resolve()
+        .then(() => api.keepAlive())
+        .catch((e) =>
+          console.warn("[zalo] keepAlive failed:", e && e.message ? e.message : e),
+        );
+    }, KEEPALIVE_INTERVAL_MS);
+    if (this._keepAliveTimer.unref) this._keepAliveTimer.unref();
+  }
+
+  _stopKeepAlive() {
+    if (this._keepAliveTimer) {
+      clearInterval(this._keepAliveTimer);
+      this._keepAliveTimer = null;
+    }
+  }
+
+  /** Cancel any pending auto-relogin and clear the in-flight guard. */
+  _stopReconnect() {
+    if (this._autoReloginTimer) {
+      clearTimeout(this._autoReloginTimer);
+      this._autoReloginTimer = null;
+    }
+    this._reconnecting = false;
+  }
+
+  /**
+   * Mark the session permanently dead and notify listeners. Recovery from here
+   * is manual: re-scan QR via POST /relogin.
+   */
+  _declareSessionDead(code, reason) {
+    this.loggedIn = false;
+    this.sessionDead = true;
+    this.sessionDeadReason = `code=${code} reason=${reason || ""}`.trim();
+    this.emit("status", { connected: false, dead: true, code, reason });
+    this.emit("session_dead", {
+      code,
+      reason: reason || "",
+      message:
+        code === 3000
+          ? "Zalo session ended: account logged in from another device/Zalo Web."
+          : code === 3003
+            ? "Zalo session was kicked by the server."
+            : "Zalo session closed (cookie expired or network). Re-scan QR to recover.",
+    });
+  }
+
+  /**
+   * Attempt to recover a permanently-closed session with the saved cookie
+   * (no QR), with linear backoff. On success the new "connected" event resets
+   * the attempt budget; once the budget is exhausted (or the cookie itself is
+   * dead) we fall back to declaring the session dead for manual QR recovery.
+   */
+  _scheduleAutoRelogin(code, reason) {
+    if (this._reconnecting) return;
+    if (this._autoReloginAttempts >= MAX_AUTO_RELOGIN_ATTEMPTS) {
+      this._declareSessionDead(code, reason);
+      return;
+    }
+    this._reconnecting = true;
+    this._autoReloginAttempts++;
+    const attempt = this._autoReloginAttempts;
+    const delay = Math.min(attempt * AUTO_RELOGIN_BASE_MS, AUTO_RELOGIN_MAX_MS);
+    console.log(
+      `[zalo] auto-relogin attempt ${attempt}/${MAX_AUTO_RELOGIN_ATTEMPTS} ` +
+        `in ${Math.round(delay / 1000)}s (code=${code})`,
+    );
+    this.emit("status", { connected: false, reconnecting: true, code, reason });
+    this._autoReloginTimer = setTimeout(() => {
+      this._autoReloginTimer = null;
+      this.relogin({ forceQR: false, cookieOnly: true })
+        .then((r) => {
+          console.log("[zalo] auto-relogin succeeded via", r.method);
+          this._reconnecting = false;
+          // The fresh listener's "connected" event resets _autoReloginAttempts.
+        })
+        .catch((e) => {
+          console.error(
+            "[zalo] auto-relogin failed:",
+            e && e.message ? e.message : e,
+          );
+          this._reconnecting = false;
+          if (this._autoReloginAttempts >= MAX_AUTO_RELOGIN_ATTEMPTS) {
+            this._declareSessionDead(code, reason);
+          } else {
+            this._scheduleAutoRelogin(code, reason);
+          }
+        });
+    }, delay);
+    if (this._autoReloginTimer.unref) this._autoReloginTimer.unref();
   }
 
   _wireListeners() {
@@ -487,6 +614,10 @@ export class ZaloClient extends EventEmitter {
     listener.on("connected", () => {
       console.log("[zalo] listener connected");
       this.sessionDead = false;
+      // A healthy connection replenishes the auto-relogin budget so periodic
+      // drops don't slowly exhaust it over the session's lifetime.
+      this._autoReloginAttempts = 0;
+      this._reconnecting = false;
       this.emit("status", { connected: true });
     });
     listener.on("disconnected", (code, reason) => {
@@ -495,23 +626,19 @@ export class ZaloClient extends EventEmitter {
       this.emit("status", { connected: false, transient: true, code, reason });
     });
     listener.on("closed", (code, reason) => {
-      // Permanent close: retries exhausted OR a fatal code (session killed).
-      // 3000 = DuplicateConnection (logged in elsewhere), 3003 = KickConnection.
-      console.log("[zalo] listener CLOSED (session likely dead)", code, reason);
+      // Permanent close: zca-js's retry budget is exhausted OR a fatal code.
+      // 3000 = DuplicateConnection (logged in elsewhere), 3003 = KickConnection
+      // are terminal — re-scanning QR is the only recovery, so don't auto-retry.
+      // Anything else (cookie/network) gets an automatic cookie relogin first.
+      console.log("[zalo] listener CLOSED", code, reason);
       this.loggedIn = false;
-      this.sessionDead = true;
-      this.sessionDeadReason = `code=${code} reason=${reason || ""}`.trim();
-      this.emit("status", { connected: false, dead: true, code, reason });
-      this.emit("session_dead", {
-        code,
-        reason: reason || "",
-        message:
-          code === 3000
-            ? "Zalo session ended: account logged in from another device/Zalo Web."
-            : code === 3003
-              ? "Zalo session was kicked by the server."
-              : "Zalo session closed (cookie expired or network). Re-scan QR to recover.",
-      });
+      this._stopKeepAlive();
+      const fatal = code === 3000 || code === 3003;
+      if (fatal) {
+        this._declareSessionDead(code, reason);
+      } else {
+        this._scheduleAutoRelogin(code, reason);
+      }
     });
     listener.on("error", (err) => {
       console.error("[zalo] listener error:", err);
@@ -966,7 +1093,9 @@ export class ZaloClient extends EventEmitter {
    * clears state, and starts a fresh login (cookie first, QR fallback).
    * Forces QR when the saved cookie is the thing that died.
    */
-  async relogin({ forceQR = true } = {}) {
+  async relogin({ forceQR = true, cookieOnly = false } = {}) {
+    this._stopReconnect();
+    this._stopKeepAlive();
     try {
       if (this.api && this.api.listener) this.api.listener.stop();
     } catch {
@@ -974,11 +1103,13 @@ export class ZaloClient extends EventEmitter {
     }
     this.api = null;
     this.loggedIn = false;
-    return await this.login({ forceQR });
+    return await this.login({ forceQR, cookieOnly });
   }
 
-  /** Graceful shutdown: stop listener, close the persistence stream. */
+  /** Graceful shutdown: stop timers, listener, close the persistence stream. */
   async shutdown() {
+    this._stopReconnect();
+    this._stopKeepAlive();
     try {
       if (this.api && this.api.listener) this.api.listener.stop();
     } catch {
